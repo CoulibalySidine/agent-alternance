@@ -70,7 +70,9 @@ class Offre:
 FICHIER_OFFRES = Path(__file__).parent / "offres.json"
 
 
-def sauvegarder_offres(offres: list[Offre], fichier: Path = FICHIER_OFFRES):
+def sauvegarder_offres(offres: list[Offre], fichier: Path = None):
+    if fichier is None:
+        fichier = FICHIER_OFFRES
     data = [o.to_dict() for o in offres]
     fichier.write_text(
         json.dumps(data, indent=2, ensure_ascii=False),
@@ -79,7 +81,9 @@ def sauvegarder_offres(offres: list[Offre], fichier: Path = FICHIER_OFFRES):
     log.info(f"✅ {len(offres)} offres sauvegardées dans {fichier.name}")
 
 
-def charger_offres(fichier: Path = FICHIER_OFFRES) -> list[Offre]:
+def charger_offres(fichier: Path = None) -> list[Offre]:
+    if fichier is None:
+        fichier = FICHIER_OFFRES
     if not fichier.exists():
         return []
     data = json.loads(fichier.read_text(encoding="utf-8"))

@@ -139,14 +139,18 @@ class Candidature:
 # STOCKAGE
 # ===================================================================
 
-def charger_suivi(chemin: Path = SUIVI_PATH) -> list[Candidature]:
+def charger_suivi(chemin: Path = None) -> list[Candidature]:
+    if chemin is None:
+        chemin = SUIVI_PATH
     if not chemin.exists():
         return []
     data = json.loads(chemin.read_text(encoding="utf-8"))
     return [Candidature.from_dict(item) for item in data]
 
 
-def sauvegarder_suivi(candidatures: list[Candidature], chemin: Path = SUIVI_PATH):
+def sauvegarder_suivi(candidatures: list[Candidature], chemin: Path = None):
+    if chemin is None:
+        chemin = SUIVI_PATH
     data = [c.to_dict() for c in candidatures]
     chemin.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
     log.info(f"✅ {len(candidatures)} candidatures sauvegardées dans {chemin.name}")

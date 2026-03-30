@@ -76,12 +76,15 @@ def generer_profil(
         raise
 
 
-def sauvegarder_profil(contenu_yaml: str, chemin: Path = PROFIL_PATH) -> Path:
+def sauvegarder_profil(contenu_yaml: str, chemin: Path = None) -> Path:
     """
     Sauvegarde le profil YAML sur le disque.
 
     Crée un backup de l'ancien profil si il existe.
     """
+    if chemin is None:
+        chemin = PROFIL_PATH
+
     # Backup de l'ancien
     if chemin.exists():
         backup = chemin.with_suffix(".yaml.bak")
@@ -93,8 +96,10 @@ def sauvegarder_profil(contenu_yaml: str, chemin: Path = PROFIL_PATH) -> Path:
     return chemin
 
 
-def charger_profil(chemin: Path = PROFIL_PATH) -> Optional[str]:
+def charger_profil(chemin: Path = None) -> Optional[str]:
     """Charge le profil actuel si il existe."""
+    if chemin is None:
+        chemin = PROFIL_PATH
     if not chemin.exists():
         return None
     return chemin.read_text(encoding="utf-8")
