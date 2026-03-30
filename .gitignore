@@ -1,0 +1,49 @@
+# =============================================================
+# .gitignore — Fichiers à NE PAS versionner
+# =============================================================
+
+# --- Secrets ---
+.env
+*.env
+# Empêche tout fichier contenant des clés d'être commit
+
+# --- Données personnelles ---
+qualification/profil.yaml
+qualification/profil.yaml.bak
+uploads/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.pyo
+venv/
+.venv/
+*.egg-info/
+
+# --- Fichiers générés ---
+sourcing/offres.json
+sourcing/offres_backup.json
+sourcing/offres_archivees.json
+suivi/suivi.json
+suivi/suivi_backup.json
+suivi/dashboard.html
+candidature/lettres/
+
+# --- Logs ---
+logs/
+*.log
+
+# --- Frontend ---
+node_modules/
+frontend/node_modules/
+frontend/dist/
+
+# --- IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- OS ---
+Thumbs.db
+.DS_Store
