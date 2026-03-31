@@ -3,8 +3,9 @@ import { useEffect, useState } from 'react'
 import { getHealth } from '../api'
 
 const NAV = [
-  { to: '/offres', icon: '📋', label: 'Offres' },
-  { to: '/', icon: '📊', label: 'Suivi' },
+  { to: '/', icon: '👤', label: 'Profil', end: true },
+  { to: '/offres', icon: '📋', label: 'Offres', end: false },
+  { to: '/suivi', icon: '📊', label: 'Suivi', end: false },
 ]
 
 export default function Layout({ children }) {
@@ -26,7 +27,12 @@ export default function Layout({ children }) {
         </div>
         <nav>
           {NAV.map(n => (
-            <NavLink key={n.to} to={n.to} end className={({ isActive }) => isActive ? 'active' : ''}>
+            <NavLink
+              key={n.to}
+              to={n.to}
+              end={n.end}
+              className={({ isActive }) => isActive ? 'active' : ''}
+            >
               <span>{n.icon}</span> {n.label}
             </NavLink>
           ))}

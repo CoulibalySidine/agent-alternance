@@ -2,9 +2,8 @@
 routes/qualification.py — Endpoints du module Qualification
 =============================================================
 
-POST /score/{id}        → Scorer une offre (async)
-POST /score/batch       → Scorer un lot d'offres (async)
-GET  /tasks/{task_id}   → Consulter l'état d'une tâche async
+IMPORTANT : /score/batch est défini AVANT /score/{offre_id}
+sinon FastAPI interprète "batch" comme un offre_id.
 """
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
@@ -25,7 +24,34 @@ router = APIRouter(tags=["Qualification"])
 
 
 # ============================================================
-# POST /score/{id} — Scorer UNE offre (async)
+# POST /score/batch — DOIT ÊTRE AVANT /score/{offre_id}
+# ============================================================
+
+@router.post("/score/batch", response_model=TaskResponse)
+def scorer_batch(
+    params: ScoreBatchRequest,
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    api_key: str = Depends(get_api_key),
+):
+    """
+    Lance le scoring d'un lot d'offres en arrière-plan.
+
+    - Si `ids` est fourni : score uniquement ces offres
+    - Sinon : score les offres non encore évaluées
+    - `max_offres` limite le nombre (défaut: 5)
+    """
+    task = task_manager.create("scoring_batch")
+    background_tasks.add_task(
+        _scorer_batch_offres, task, params.ids, params.max_offres,
+        params.forcer_rescore, api_key,
+    )
+
+    log.info(f"Tâche scoring batch créée : {task.id} ({params.max_offres} offres max)")
+    return TaskResponse(**task.to_dict())
+
+
+# ============================================================
+# POST /score/{offre_id} — Scorer UNE offre (async)
 # ============================================================
 
 @router.post("/score/{offre_id}", response_model=TaskResponse)
@@ -64,33 +90,6 @@ def scorer_offre(
     background_tasks.add_task(_scorer_une_offre, task, offre_id, api_key)
 
     log.info(f"Tâche scoring créée : {task.id} pour offre {offre_id}")
-    return TaskResponse(**task.to_dict())
-
-
-# ============================================================
-# POST /score/batch — Scorer PLUSIEURS offres (async)
-# ============================================================
-
-@router.post("/score/batch", response_model=TaskResponse)
-def scorer_batch(
-    params: ScoreBatchRequest,
-    background_tasks: BackgroundTasks = BackgroundTasks(),
-    api_key: str = Depends(get_api_key),
-):
-    """
-    Lance le scoring d'un lot d'offres en arrière-plan.
-
-    - Si `ids` est fourni : score uniquement ces offres
-    - Sinon : score les offres non encore évaluées
-    - `max_offres` limite le nombre (défaut: 5)
-    """
-    task = task_manager.create("scoring_batch")
-    background_tasks.add_task(
-        _scorer_batch_offres, task, params.ids, params.max_offres,
-        params.forcer_rescore, api_key,
-    )
-
-    log.info(f"Tâche scoring batch créée : {task.id} ({params.max_offres} offres max)")
     return TaskResponse(**task.to_dict())
 
 

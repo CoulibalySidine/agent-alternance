@@ -2,16 +2,17 @@
 main.py — Point d'entrée de l'API FastAPI
 ==========================================
 
+Toutes les routes sont sous /api pour éviter les conflits
+avec les routes frontend React (/suivi, /offres, etc.)
+
 COMMENT LANCER :
-    cd C:\\Users\\SidCo\\Projets\\agent-alternance
     uvicorn api.main:app --reload --port 8000
 
-DOCUMENTATION AUTO :
-    http://localhost:8000/docs     → Swagger UI
-    http://localhost:8000/redoc    → ReDoc
+DOCUMENTATION :
+    http://localhost:8000/docs
 """
 
-from fastapi import FastAPI
+from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.routes import sourcing, qualification, candidature, suivi
@@ -44,12 +45,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Montage des routers
-app.include_router(profil_routes.router)
-app.include_router(sourcing.router)
-app.include_router(qualification.router)
-app.include_router(candidature.router)
-app.include_router(suivi.router)
+# Regrouper tous les routers sous /api
+api_router = APIRouter(prefix="/api")
+api_router.include_router(profil_routes.router)
+api_router.include_router(sourcing.router)
+api_router.include_router(qualification.router)
+api_router.include_router(candidature.router)
+api_router.include_router(suivi.router)
+
+app.include_router(api_router)
 
 
 @app.get("/", tags=["Système"])
@@ -59,17 +63,10 @@ def racine():
         "version": "1.1.0",
         "documentation": "/docs",
         "flux": "1. Upload CV → 2. Scrape → 3. Score → 4. Générer dossier → 5. Suivi",
-        "endpoints": {
-            "profil": "/profil/upload",
-            "sourcing": "/offres",
-            "qualification": "/score/batch",
-            "candidature": "/candidatures/{id}/generer",
-            "suivi": "/suivi",
-        },
     }
 
 
-@app.get("/health", tags=["Système"])
+@app.get("/api/health", tags=["Système"])
 def health():
     from pathlib import Path
     import os
@@ -89,7 +86,6 @@ def health():
     checks["api_key"] = "configurée" if api_key else "manquante"
 
     status_global = "ok" if checks["api"] == "ok" and checks["api_key"] == "configurée" else "dégradé"
-
     return {"status": status_global, "checks": checks}
 
 
