@@ -4,13 +4,9 @@ main.py — Point d'entrée de l'API FastAPI
 
 Toutes les routes sont sous /api pour éviter les conflits
 avec les routes frontend React (/suivi, /offres, etc.)
-
-COMMENT LANCER :
-    uvicorn api.main:app --reload --port 8000
-
-DOCUMENTATION :
-    http://localhost:8000/docs
 """
+
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,6 +17,15 @@ from logger import get_logger
 
 log = get_logger("api")
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    log.info("🚀 Agent Alternance API démarrée")
+    log.info("📖 Documentation : http://localhost:8000/docs")
+    yield
+    log.info("🛑 Agent Alternance API arrêtée")
+
+
 app = FastAPI(
     title="Agent Alternance API",
     description=(
@@ -30,6 +35,7 @@ app = FastAPI(
     version="1.1.0",
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -87,14 +93,3 @@ def health():
 
     status_global = "ok" if checks["api"] == "ok" and checks["api_key"] == "configurée" else "dégradé"
     return {"status": status_global, "checks": checks}
-
-
-@app.on_event("startup")
-def on_startup():
-    log.info("🚀 Agent Alternance API démarrée")
-    log.info("📖 Documentation : http://localhost:8000/docs")
-
-
-@app.on_event("shutdown")
-def on_shutdown():
-    log.info("🛑 Agent Alternance API arrêtée")

@@ -1,18 +1,11 @@
 """
 test_api_sourcing.py — Tests des endpoints Sourcing
-=====================================================
-
-Teste : GET /offres (filtres, tri, pagination), GET /offres/{id}, DELETE /offres/{id}
-N'appelle PAS l'API Claude (pas de scoring ni scraping réel).
 """
 
 import json
 import pytest
 from unittest.mock import patch
 from fastapi.testclient import TestClient
-
-
-# --- Fixtures locales ---
 
 OFFRES = [
     {
@@ -52,91 +45,82 @@ def client(tmp_path):
         yield TestClient(app)
 
 
-# ============================================================
-# GET /offres
-# ============================================================
-
 class TestListerOffres:
 
     def test_liste_toutes(self, client):
-        r = client.get("/offres")
+        r = client.get("/api/offres")
         assert r.status_code == 200
-        data = r.json()
-        assert len(data) == 3
+        assert len(r.json()) == 3
 
     def test_filtre_source(self, client):
-        r = client.get("/offres?source=demo")
+        r = client.get("/api/offres?source=demo")
         assert r.status_code == 200
         data = r.json()
         assert len(data) == 1
         assert data[0]["source"] == "demo"
 
     def test_filtre_lieu(self, client):
-        r = client.get("/offres?lieu=Lyon")
+        r = client.get("/api/offres?lieu=Lyon")
         data = r.json()
         assert len(data) == 1
         assert data[0]["lieu"] == "Lyon"
 
     def test_filtre_lieu_partiel(self, client):
-        r = client.get("/offres?lieu=par")
+        r = client.get("/api/offres?lieu=par")
         data = r.json()
-        assert len(data) == 2  # Paris x2
+        assert len(data) == 2
 
     def test_filtre_scorees_only(self, client):
-        r = client.get("/offres?scorees_only=true")
+        r = client.get("/api/offres?scorees_only=true")
         data = r.json()
         assert len(data) == 2
         assert all(o["score"] is not None for o in data)
 
     def test_filtre_non_scorees_only(self, client):
-        r = client.get("/offres?non_scorees_only=true")
+        r = client.get("/api/offres?non_scorees_only=true")
         data = r.json()
         assert len(data) == 1
         assert data[0]["score"] is None
 
     def test_filtre_score_min(self, client):
-        r = client.get("/offres?score_min=70")
+        r = client.get("/api/offres?score_min=70")
         data = r.json()
         assert len(data) == 1
         assert data[0]["score"] == 75
 
     def test_filtre_recherche(self, client):
-        r = client.get("/offres?recherche=python")
+        r = client.get("/api/offres?recherche=python")
         data = r.json()
         assert len(data) == 1
         assert "Python" in data[0]["titre"]
 
     def test_tri_score_desc(self, client):
-        r = client.get("/offres?tri=score&ordre=desc")
+        r = client.get("/api/offres?tri=score&ordre=desc")
         data = r.json()
         scores = [o["score"] or 0 for o in data]
         assert scores == sorted(scores, reverse=True)
 
     def test_tri_entreprise_asc(self, client):
-        r = client.get("/offres?tri=entreprise&ordre=asc")
+        r = client.get("/api/offres?tri=entreprise&ordre=asc")
         data = r.json()
         noms = [o["entreprise"].lower() for o in data]
         assert noms == sorted(noms)
 
     def test_pagination_limit(self, client):
-        r = client.get("/offres?limit=2")
+        r = client.get("/api/offres?limit=2")
         data = r.json()
         assert len(data) == 2
 
     def test_pagination_offset(self, client):
-        r = client.get("/offres?limit=1&offset=2&tri=date&ordre=asc")
+        r = client.get("/api/offres?limit=1&offset=2&tri=date&ordre=asc")
         data = r.json()
         assert len(data) == 1
 
 
-# ============================================================
-# GET /offres/{id}
-# ============================================================
-
 class TestDetailOffre:
 
     def test_detail_existe(self, client):
-        r = client.get("/offres/wttj_002")
+        r = client.get("/api/offres/wttj_002")
         assert r.status_code == 200
         data = r.json()
         assert data["titre"] == "Data Analyst"
@@ -144,26 +128,21 @@ class TestDetailOffre:
         assert data["points_forts"] == ["Python"]
 
     def test_detail_404(self, client):
-        r = client.get("/offres/inexistant_999")
+        r = client.get("/api/offres/inexistant_999")
         assert r.status_code == 404
 
-
-# ============================================================
-# DELETE /offres/{id}
-# ============================================================
 
 class TestDeleteOffre:
 
     def test_delete_existe(self, client):
-        r = client.delete("/offres/demo_003")
+        r = client.delete("/api/offres/demo_003")
         assert r.status_code == 200
         assert r.json()["restantes"] == 2
 
-        # Vérifier que l'offre n'est plus là
-        r2 = client.get("/offres")
+        r2 = client.get("/api/offres")
         ids = [o["id"] for o in r2.json()]
         assert "demo_003" not in ids
 
     def test_delete_404(self, client):
-        r = client.delete("/offres/inexistant")
+        r = client.delete("/api/offres/inexistant")
         assert r.status_code == 404

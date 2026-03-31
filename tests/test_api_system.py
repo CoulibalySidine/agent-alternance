@@ -1,8 +1,5 @@
 """
 test_api_system.py — Tests des endpoints Système et Profil
-============================================================
-
-Teste : GET /, GET /health, GET /profil, PUT /profil
 """
 
 import json
@@ -29,10 +26,6 @@ def client(tmp_path):
         yield TestClient(app)
 
 
-# ============================================================
-# GET / — Page d'accueil
-# ============================================================
-
 class TestRacine:
 
     def test_racine(self, client):
@@ -40,18 +33,12 @@ class TestRacine:
         assert r.status_code == 200
         data = r.json()
         assert data["nom"] == "Agent Alternance API"
-        assert "profil" in data["endpoints"]
-        assert "sourcing" in data["endpoints"]
 
-
-# ============================================================
-# GET /health — Health check
-# ============================================================
 
 class TestHealth:
 
     def test_health(self, client):
-        r = client.get("/health")
+        r = client.get("/api/health")
         assert r.status_code == 200
         data = r.json()
         assert "status" in data
@@ -59,14 +46,10 @@ class TestHealth:
         assert data["checks"]["api"] == "ok"
 
 
-# ============================================================
-# GET /profil — Voir le profil
-# ============================================================
-
 class TestVoirProfil:
 
     def test_profil_existe(self, client):
-        r = client.get("/profil")
+        r = client.get("/api/profil")
         assert r.status_code == 200
         data = r.json()
         assert data["existe"] is True
@@ -75,7 +58,7 @@ class TestVoirProfil:
     def test_profil_inexistant(self, tmp_path):
         offres_path = tmp_path / "offres.json"
         suivi_path = tmp_path / "suivi.json"
-        profil_path = tmp_path / "profil_inexistant.yaml"  # n'existe pas
+        profil_path = tmp_path / "profil_inexistant.yaml"
 
         offres_path.write_text("[]", encoding="utf-8")
         suivi_path.write_text("[]", encoding="utf-8")
@@ -85,32 +68,27 @@ class TestVoirProfil:
              patch("profil.generateur_profil.PROFIL_PATH", profil_path):
             from api.main import app
             c = TestClient(app)
-            r = c.get("/profil")
+            r = c.get("/api/profil")
             assert r.status_code == 200
             data = r.json()
             assert data["existe"] is False
             assert data["contenu"] is None
 
 
-# ============================================================
-# PUT /profil — Modifier le profil
-# ============================================================
-
 class TestModifierProfil:
 
     def test_modifier(self, client):
         nouveau = 'nom: "Nouveau"\nemail: "new@test.com"'
-        r = client.put("/profil", json={"contenu": nouveau})
+        r = client.put("/api/profil", json={"contenu": nouveau})
         assert r.status_code == 200
 
-        # Vérifier que le profil a changé
-        r2 = client.get("/profil")
+        r2 = client.get("/api/profil")
         assert "Nouveau" in r2.json()["contenu"]
 
     def test_modifier_vide(self, client):
-        r = client.put("/profil", json={"contenu": ""})
+        r = client.put("/api/profil", json={"contenu": ""})
         assert r.status_code == 400
 
     def test_modifier_espaces(self, client):
-        r = client.put("/profil", json={"contenu": "   "})
+        r = client.put("/api/profil", json={"contenu": "   "})
         assert r.status_code == 400

@@ -1,16 +1,11 @@
 """
 test_api_suivi.py — Tests des endpoints Suivi
-===============================================
-
-Teste : GET /suivi, GET /suivi/stats, POST /suivi,
-        PATCH /suivi/{id}/etat, DELETE /suivi/{id}
 """
 
 import json
 import pytest
 from unittest.mock import patch
 from fastapi.testclient import TestClient
-
 
 OFFRES = [
     {
@@ -56,43 +51,35 @@ def client(tmp_path):
         yield TestClient(app)
 
 
-# ============================================================
-# GET /suivi
-# ============================================================
-
 class TestListerSuivi:
 
     def test_liste_toutes(self, client):
-        r = client.get("/suivi")
+        r = client.get("/api/suivi")
         assert r.status_code == 200
         data = r.json()
         assert len(data) == 1
         assert data[0]["offre_id"] == "wttj_002"
 
     def test_filtre_etat(self, client):
-        r = client.get("/suivi?etat=brouillon")
+        r = client.get("/api/suivi?etat=brouillon")
         data = r.json()
         assert len(data) == 1
 
     def test_filtre_etat_vide(self, client):
-        r = client.get("/suivi?etat=acceptee")
+        r = client.get("/api/suivi?etat=acceptee")
         data = r.json()
         assert len(data) == 0
 
     def test_filtre_entreprise(self, client):
-        r = client.get("/suivi?entreprise=data")
+        r = client.get("/api/suivi?entreprise=data")
         data = r.json()
         assert len(data) == 1
 
 
-# ============================================================
-# GET /suivi/stats
-# ============================================================
-
 class TestStatsSuivi:
 
     def test_stats(self, client):
-        r = client.get("/suivi/stats")
+        r = client.get("/api/suivi/stats")
         assert r.status_code == 200
         data = r.json()
         assert data["total"] == 1
@@ -100,55 +87,46 @@ class TestStatsSuivi:
         assert data["score_moyen"] == 65.0
 
 
-# ============================================================
-# POST /suivi — Ajouter au suivi
-# ============================================================
-
 class TestAjouterSuivi:
 
     def test_ajouter(self, client):
-        r = client.post("/suivi", json={"offre_id": "wttj_001"})
+        r = client.post("/api/suivi", json={"offre_id": "wttj_001"})
         assert r.status_code == 200
         data = r.json()
         assert data["offre_id"] == "wttj_001"
         assert data["etat"] == "brouillon"
         assert data["titre"] == "Dev Python"
 
-        # Vérifier que le suivi a maintenant 2 entrées
-        r2 = client.get("/suivi")
+        r2 = client.get("/api/suivi")
         assert len(r2.json()) == 2
 
     def test_ajouter_doublon(self, client):
-        r = client.post("/suivi", json={"offre_id": "wttj_002"})
-        assert r.status_code == 409  # déjà dans le suivi
+        r = client.post("/api/suivi", json={"offre_id": "wttj_002"})
+        assert r.status_code == 409
 
     def test_ajouter_offre_inexistante(self, client):
-        r = client.post("/suivi", json={"offre_id": "fake_999"})
+        r = client.post("/api/suivi", json={"offre_id": "fake_999"})
         assert r.status_code == 404
 
     def test_ajouter_avec_note(self, client):
-        r = client.post("/suivi", json={"offre_id": "wttj_001", "notes": "Offre intéressante"})
+        r = client.post("/api/suivi", json={"offre_id": "wttj_001", "notes": "Offre intéressante"})
         assert r.status_code == 200
         data = r.json()
         assert len(data["notes"]) == 1
         assert data["notes"][0]["texte"] == "Offre intéressante"
 
 
-# ============================================================
-# PATCH /suivi/{id}/etat — Changer l'état
-# ============================================================
-
 class TestChangerEtat:
 
     def test_changer_etat_valide(self, client):
-        r = client.patch("/suivi/wttj_002/etat", json={"nouvel_etat": "envoyee"})
+        r = client.patch("/api/suivi/wttj_002/etat", json={"nouvel_etat": "envoyee"})
         assert r.status_code == 200
         data = r.json()
         assert data["etat"] == "envoyee"
         assert len(data["historique"]) == 2
 
     def test_changer_etat_avec_commentaire(self, client):
-        r = client.patch("/suivi/wttj_002/etat", json={
+        r = client.patch("/api/suivi/wttj_002/etat", json={
             "nouvel_etat": "envoyee",
             "commentaire": "Envoyé via WTTJ"
         })
@@ -157,27 +135,23 @@ class TestChangerEtat:
         assert data["historique"][-1]["commentaire"] == "Envoyé via WTTJ"
 
     def test_changer_etat_inconnu(self, client):
-        r = client.patch("/suivi/wttj_002/etat", json={"nouvel_etat": "etat_bidon"})
-        assert r.status_code == 422  # Pydantic validation error (not in enum)
+        r = client.patch("/api/suivi/wttj_002/etat", json={"nouvel_etat": "etat_bidon"})
+        assert r.status_code == 422
 
     def test_changer_etat_offre_inexistante(self, client):
-        r = client.patch("/suivi/fake_999/etat", json={"nouvel_etat": "envoyee"})
+        r = client.patch("/api/suivi/fake_999/etat", json={"nouvel_etat": "envoyee"})
         assert r.status_code == 404
 
-
-# ============================================================
-# DELETE /suivi/{id}
-# ============================================================
 
 class TestRetirerSuivi:
 
     def test_retirer(self, client):
-        r = client.delete("/suivi/wttj_002")
+        r = client.delete("/api/suivi/wttj_002")
         assert r.status_code == 200
 
-        r2 = client.get("/suivi")
+        r2 = client.get("/api/suivi")
         assert len(r2.json()) == 0
 
     def test_retirer_inexistant(self, client):
-        r = client.delete("/suivi/fake_999")
+        r = client.delete("/api/suivi/fake_999")
         assert r.status_code == 404
