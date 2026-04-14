@@ -1,65 +1,107 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { uploadCV, getProfil, updateProfil, deleteProfil } from '../api'
+import { uploadCV, getProfil, getProfilParsed, updateProfilStructured, deleteProfil } from '../api'
 import { showToast } from '../components/Toast'
+import ProfileEditor from '../components/ProfileEditor'
 
 export default function Onboarding() {
   const [file, setFile] = useState(null)
   const [metier, setMetier] = useState('')
   const [ville, setVille] = useState('')
   const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  // Profil : null = pas de profil, objet = profil chargé
   const [profil, setProfil] = useState(null)
-  const [editMode, setEditMode] = useState(false)
-  const [editContent, setEditContent] = useState('')
+  const [profilExiste, setProfilExiste] = useState(false)
+
+  // Mode : 'onboarding' | 'editor' | 'yaml' (fallback si parsing échoue)
+  const [mode, setMode] = useState('onboarding')
+  const [yamlBrut, setYamlBrut] = useState('')
+
   const [dragOver, setDragOver] = useState(false)
   const fileRef = useRef()
   const navigate = useNavigate()
 
-  // Charger le profil existant
+  // Charger le profil existant au montage
   useEffect(() => {
-    getProfil().then(p => {
-      if (p.existe) setProfil(p.contenu)
-    }).catch(() => {})
+    chargerProfil()
   }, [])
 
+  const chargerProfil = async () => {
+    try {
+      const res = await getProfilParsed()
+      if (res.existe && res.profil) {
+        setProfil(res.profil)
+        setProfilExiste(true)
+        setMode('editor')
+      } else if (res.existe && res.brut) {
+        // YAML invalide → fallback texte
+        setYamlBrut(res.brut)
+        setProfilExiste(true)
+        setMode('yaml')
+      } else {
+        setProfilExiste(false)
+        setMode('onboarding')
+      }
+    } catch {
+      // Fallback : essayer l'ancien endpoint
+      try {
+        const p = await getProfil()
+        if (p.existe) {
+          setYamlBrut(p.contenu)
+          setProfilExiste(true)
+          setMode('yaml')
+        }
+      } catch {
+        setProfilExiste(false)
+        setMode('onboarding')
+      }
+    }
+  }
+
+  // Upload du CV
   const handleUpload = async () => {
     if (!file) { showToast('Sélectionne un CV', 'error'); return }
     setLoading(true)
     try {
-      const res = await uploadCV(file, metier, ville)
+      await uploadCV(file, metier, ville)
       showToast('Profil généré avec succès !')
-      // Recharger le profil
-      const p = await getProfil()
-      setProfil(p.contenu)
+      await chargerProfil()
     } catch (e) {
       showToast(e.message, 'error')
     }
     setLoading(false)
   }
 
-  const handleSaveEdit = async () => {
+  // Sauvegarder le profil via l'éditeur visuel
+  const handleSave = async () => {
+    setSaving(true)
     try {
-      await updateProfil(editContent)
-      setProfil(editContent)
-      setEditMode(false)
-      showToast('Profil mis à jour')
+      await updateProfilStructured(profil)
+      showToast('Profil sauvegardé')
     } catch (e) {
       showToast(e.message, 'error')
     }
+    setSaving(false)
   }
 
+  // Reset
   const handleReset = async () => {
-    if (!confirm('Supprimer le profil actuel ?')) return
+    if (!confirm('Supprimer le profil actuel ? Tu pourras en générer un nouveau.')) return
     try {
       await deleteProfil()
       setProfil(null)
+      setProfilExiste(false)
       setFile(null)
+      setMode('onboarding')
       showToast('Profil supprimé')
     } catch (e) {
       showToast(e.message, 'error')
     }
   }
 
+  // Drop handler
   const handleDrop = (e) => {
     e.preventDefault()
     setDragOver(false)
@@ -67,67 +109,82 @@ export default function Onboarding() {
     if (f) setFile(f)
   }
 
-  // Si un profil existe → mode "profil actif"
-  if (profil && !editMode) {
+  // ============================================================
+  // MODE ÉDITEUR VISUEL
+  // ============================================================
+  if (mode === 'editor' && profil) {
     return (
       <div>
         <div className="page-head">
-          <h1><span>👤</span> Profil actif</h1>
+          <h1><span>👤</span> Mon profil</h1>
           <div className="btn-group">
-            <button className="btn" onClick={() => { setEditContent(profil); setEditMode(true) }}>
-              ✏️ Modifier
+            <button className="btn" onClick={() => navigate('/offres')}>
+              📋 Voir les offres →
+            </button>
+            <button
+              className="btn"
+              onClick={() => {
+                // Re-upload : basculer en mode onboarding
+                setMode('onboarding')
+              }}
+            >
+              📄 Nouveau CV
             </button>
             <button className="btn btn-danger" onClick={handleReset}>
               🗑️ Réinitialiser
-            </button>
-            <button className="btn btn-primary" onClick={() => navigate('/offres')}>
-              📋 Voir les offres →
             </button>
           </div>
         </div>
 
         <div style={{
           background: 'var(--green-dim)', border: '1px solid rgba(63,185,80,0.3)',
-          borderRadius: 'var(--radius)', padding: '12px 16px', marginBottom: 20,
-          fontSize: 13, color: 'var(--green)',
+          borderRadius: 'var(--radius)', padding: '10px 16px', marginBottom: 16,
+          fontSize: 13, color: 'var(--green)', display: 'flex', alignItems: 'center',
+          justifyContent: 'space-between',
         }}>
-          ✅ Profil chargé — tu peux scraper des offres et lancer le scoring.
+          <span>✅ Profil actif — modifie les champs ci-dessous si besoin</span>
         </div>
 
-        <div style={{
-          background: 'var(--surface)', border: '1px solid var(--border)',
-          borderRadius: 'var(--radius)', padding: '20px',
-        }}>
-          <pre style={{
-            fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-muted)',
-            whiteSpace: 'pre-wrap', lineHeight: 1.6, maxHeight: 500, overflow: 'auto',
-          }}>
-            {profil}
-          </pre>
-        </div>
+        <ProfileEditor
+          profil={profil}
+          onChange={setProfil}
+          onSave={handleSave}
+          saving={saving}
+        />
       </div>
     )
   }
 
-  // Mode édition
-  if (editMode) {
+  // ============================================================
+  // MODE YAML FALLBACK (si le parsing a échoué)
+  // ============================================================
+  if (mode === 'yaml') {
     return (
       <div>
         <div className="page-head">
-          <h1><span>✏️</span> Modifier le profil</h1>
+          <h1><span>✏️</span> Profil (YAML)</h1>
           <div className="btn-group">
-            <button className="btn" onClick={() => setEditMode(false)}>Annuler</button>
-            <button className="btn btn-primary" onClick={handleSaveEdit}>💾 Sauvegarder</button>
+            <button className="btn" onClick={() => chargerProfil()}>
+              🔄 Recharger en visuel
+            </button>
+            <button className="btn btn-danger" onClick={handleReset}>
+              🗑️ Réinitialiser
+            </button>
           </div>
         </div>
 
-        <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
-          Corrige les informations si Claude a mal extrait quelque chose. Le format est YAML.
-        </p>
+        <div style={{
+          background: 'var(--yellow-dim)', border: '1px solid rgba(210,153,34,0.3)',
+          borderRadius: 'var(--radius)', padding: '10px 16px', marginBottom: 16,
+          fontSize: 13, color: 'var(--yellow)',
+        }}>
+          ⚠️ Le profil YAML n'a pas pu être parsé — édition en mode texte.
+          Corrige la syntaxe puis clique "Recharger en visuel".
+        </div>
 
         <textarea
-          value={editContent}
-          onChange={e => setEditContent(e.target.value)}
+          value={yamlBrut}
+          onChange={e => setYamlBrut(e.target.value)}
           style={{
             width: '100%', minHeight: 500, background: 'var(--surface)',
             border: '1px solid var(--border)', borderRadius: 'var(--radius)',
@@ -136,15 +193,38 @@ export default function Onboarding() {
             lineHeight: 1.6,
           }}
         />
+        <button
+          className="btn btn-primary"
+          style={{ marginTop: 12, width: '100%', padding: '12px', fontSize: 14 }}
+          onClick={async () => {
+            try {
+              const { updateProfil } = await import('../api')
+              await updateProfil(yamlBrut)
+              showToast('Profil sauvegardé')
+              await chargerProfil()
+            } catch (e) {
+              showToast(e.message, 'error')
+            }
+          }}
+        >
+          💾 Sauvegarder
+        </button>
       </div>
     )
   }
 
-  // Mode onboarding (pas de profil)
+  // ============================================================
+  // MODE ONBOARDING (pas de profil)
+  // ============================================================
   return (
     <div>
       <div className="page-head">
         <h1><span>🚀</span> Bienvenue</h1>
+        {profilExiste && (
+          <button className="btn" onClick={() => setMode('editor')}>
+            ← Retour au profil
+          </button>
+        )}
       </div>
 
       <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 28, maxWidth: 600, lineHeight: 1.6 }}>

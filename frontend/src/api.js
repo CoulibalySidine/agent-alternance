@@ -1,7 +1,9 @@
 /**
- * api.js — Client API centralisé
- * Toutes les requêtes passent par /api pour éviter
- * les conflits avec les routes React Router.
+ * api.js — Client API centralisé (v2)
+ * 
+ * Ajouts v2 :
+ * - getProfilParsed()       → GET /api/profil/parsed (JSON structuré)
+ * - updateProfilStructured() → PUT /api/profil/structured (JSON → YAML)
  */
 
 async function request(path, options = {}) {
@@ -18,8 +20,11 @@ async function request(path, options = {}) {
 
 // --- Profil ---
 export const getProfil = () => request('/api/profil')
+export const getProfilParsed = () => request('/api/profil/parsed')
 export const updateProfil = (contenu) =>
   request('/api/profil', { method: 'PUT', body: JSON.stringify({ contenu }) })
+export const updateProfilStructured = (profil) =>
+  request('/api/profil/structured', { method: 'PUT', body: JSON.stringify({ profil }) })
 export const deleteProfil = () => request('/api/profil', { method: 'DELETE' })
 
 export async function uploadCV(file, metier = '', ville = '') {
