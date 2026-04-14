@@ -4,12 +4,18 @@ main.py — Point d'entrée de l'API FastAPI
 
 Toutes les routes sont sous /api pour éviter les conflits
 avec les routes frontend React (/suivi, /offres, etc.)
+
+En mode desktop (ou production), FastAPI sert aussi les fichiers
+statiques du frontend buildé (frontend/dist/).
 """
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 from api.routes import sourcing, qualification, candidature, suivi
 from api.routes import profil as profil_routes
@@ -17,10 +23,17 @@ from logger import get_logger
 
 log = get_logger("api")
 
+# Chemin vers le frontend buildé
+FRONTEND_DIST = Path(__file__).parent.parent / "frontend" / "dist"
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     log.info("🚀 Agent Alternance API démarrée")
+    if FRONTEND_DIST.exists():
+        log.info("📦 Frontend buildé détecté — mode desktop/production")
+    else:
+        log.info("🔧 Pas de build frontend — mode développement (npm run dev)")
     log.info("📖 Documentation : http://localhost:8000/docs")
     yield
     log.info("🛑 Agent Alternance API arrêtée")
@@ -64,6 +77,9 @@ app.include_router(api_router)
 
 @app.get("/", tags=["Système"])
 def racine():
+    # Si le frontend est buildé, servir index.html
+    if FRONTEND_DIST.exists():
+        return FileResponse(FRONTEND_DIST / "index.html")
     return {
         "nom": "Agent Alternance API",
         "version": "1.1.0",
@@ -93,3 +109,23 @@ def health():
 
     status_global = "ok" if checks["api"] == "ok" and checks["api_key"] == "configurée" else "dégradé"
     return {"status": status_global, "checks": checks}
+
+
+# =========================================================================
+# SERVIR LE FRONTEND BUILDÉ (mode desktop / production)
+# =========================================================================
+# Doit être APRÈS les routes API pour ne pas les masquer
+
+if FRONTEND_DIST.exists():
+    # Servir les assets statiques (JS, CSS, images)
+    app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="assets")
+
+    # Catch-all : toute route non-API renvoie index.html (pour React Router)
+    @app.get("/{full_path:path}", tags=["Frontend"])
+    def servir_frontend(request: Request, full_path: str):
+        # Si c'est un fichier statique qui existe, le servir
+        fichier = FRONTEND_DIST / full_path
+        if fichier.is_file():
+            return FileResponse(fichier)
+        # Sinon, renvoyer index.html (React Router gère le routing)
+        return FileResponse(FRONTEND_DIST / "index.html")
