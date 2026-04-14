@@ -1,6 +1,12 @@
 """
-generateur_profil.py — Génération de profil.yaml depuis un CV
-==============================================================
+generateur_profil.py — Génération de profil.yaml depuis un CV (v2)
+===================================================================
+
+V2 — Prompt anti-hallucination renforcé :
+  - Étape 1 : extraction brute (liste ce qui est dans le CV)
+  - Étape 2 : structuration en YAML
+  - Template sans valeurs d'exemple (évite le copier-coller par l'IA)
+  - Instructions négatives renforcées
 
 Envoie le texte du CV à Claude avec un prompt structuré.
 Claude retourne un profil YAML complet exploitable par tous les modules.
@@ -56,7 +62,8 @@ def generer_profil(
     try:
         response = client.messages.create(
             model=model,
-            max_tokens=2000,
+            max_tokens=3000,
+            system=_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": prompt}],
         )
         yaml_content = response.content[0].text.strip()
@@ -88,7 +95,7 @@ def sauvegarder_profil(contenu_yaml: str, chemin: Path = None) -> Path:
     # Backup de l'ancien
     if chemin.exists():
         backup = chemin.with_suffix(".yaml.bak")
-        chemin.rename(backup)
+        chemin.replace(backup)
         log.info(f"Ancien profil sauvegardé : {backup.name}")
 
     chemin.write_text(contenu_yaml, encoding="utf-8")
@@ -105,99 +112,122 @@ def charger_profil(chemin: Path = None) -> Optional[str]:
     return chemin.read_text(encoding="utf-8")
 
 
+# =========================================================================
+# PROMPT SYSTEM — contrôle strict du comportement
+# =========================================================================
+
+_SYSTEM_PROMPT = """\
+Tu es un extracteur de données de CV. Ton rôle est UNIQUEMENT d'extraire \
+les informations qui sont EXPLICITEMENT écrites dans le CV fourni.
+
+RÈGLES ABSOLUES :
+1. Tu ne dois JAMAIS inventer, deviner, déduire ou compléter une information \
+qui n'est pas écrite noir sur blanc dans le CV.
+2. Si un champ n'a pas de correspondance dans le CV, tu OMETS le champ \
+entièrement. Tu ne mets PAS de valeur vide, de "Non précisé", ou de placeholder.
+3. Tu n'ajoutes AUCUNE compétence, technologie, langue ou expérience \
+qui n'est pas mentionnée dans le CV.
+4. Pour les niveaux de compétence : tu ne les indiques QUE si le CV \
+les mentionne explicitement. Sinon, tu omets le champ "niveau".
+5. Tu copies les intitulés EXACTS du CV (diplômes, postes, entreprises). \
+Tu ne les reformules pas et tu ne les "améliores" pas.
+6. Tu ne déduis PAS de centres d'intérêt, de points forts, ou de soft skills \
+à partir du contenu du CV. Tu les inclus UNIQUEMENT s'ils sont listés.
+
+En cas de doute sur la présence d'une information : OMETS-LA."""
+
+
+# =========================================================================
+# PROMPT UTILISATEUR — extraction + structuration
+# =========================================================================
+
 def _construire_prompt(texte_cv: str, metier: str, ville: str) -> str:
     """Construit le prompt d'extraction de profil."""
 
     context_recherche = ""
     if metier:
-        context_recherche += f"\nLe candidat recherche un poste de : {metier}"
+        context_recherche += f"\n- Poste recherché : {metier}"
     if ville:
-        context_recherche += f"\nZone géographique : {ville}"
+        context_recherche += f"\n- Zone géographique : {ville}"
 
-    return f"""Tu es un expert en recrutement tech. Analyse ce CV et génère un profil structuré en YAML.
+    return f"""Voici le texte brut extrait d'un CV. Analyse-le et génère un profil YAML structuré.
 
-CV DU CANDIDAT :
+=== CV (TEXTE BRUT) ===
 {texte_cv}
+=== FIN DU CV ===
 
-CONTEXTE DE RECHERCHE :{context_recherche or " Non précisé (déduis du CV)"}
+CONTEXTE DE RECHERCHE (fourni par l'utilisateur, pas extrait du CV) :{context_recherche or " Non précisé"}
 
-CONSIGNES :
-Extrais TOUTES les informations du CV et structure-les en YAML.
-- Ne change PAS les informations, ne les invente PAS
-- Si une info est absente du CV, ne l'invente pas — omets le champ
-- Pour les compétences, déduis le niveau (débutant/intermédiaire/avancé) depuis le contexte
-- Sois précis sur les dates et les intitulés
+ÉTAPE 1 — INVENTAIRE
+Avant de générer le YAML, liste mentalement UNIQUEMENT les informations \
+que tu as trouvées dans le CV ci-dessus. Si une catégorie entière est absente \
+du CV (ex: pas de section langues, pas de projets personnels), tu ne l'incluras \
+PAS dans le YAML.
 
-Réponds UNIQUEMENT avec du YAML valide, sans backticks ni commentaire :
+ÉTAPE 2 — GÉNÉRATION YAML
+Génère le profil en suivant la structure ci-dessous.
+SUPPRIME les sections/champs pour lesquels le CV ne contient AUCUNE information.
 
-nom: "Prénom NOM"
-email: "email@exemple.com"
-telephone: "+33 X XX XX XX XX"
-localisation: "Ville ou Région"
-linkedin: "URL ou pseudo"
-github: "URL ou pseudo"
+Réponds UNIQUEMENT avec du YAML valide, sans backticks, sans commentaire, \
+sans explication avant ou après :
 
-titre: "Titre professionnel adapté au poste recherché"
+nom: "(prénom et nom tels qu'écrits dans le CV)"
+email: "(email tel qu'écrit dans le CV)"
+telephone: "(tel qu'écrit dans le CV)"
+localisation: "(ville/région telle qu'écrite dans le CV)"
+linkedin: "(URL ou pseudo tel qu'écrit dans le CV)"
+github: "(URL ou pseudo tel qu'écrit dans le CV)"
+portfolio: "(URL telle qu'écrite dans le CV)"
+
+titre: "(intitulé professionnel tel qu'écrit dans le CV, ou le poste recherché si fourni)"
 
 formation:
-  - diplome: "Intitulé du diplôme"
-    etablissement: "Nom de l'école/université"
-    periode: "20XX — 20XX"
-    details: "Mentions, spécialités, projets notables"
+  - diplome: "(intitulé EXACT du diplôme)"
+    etablissement: "(nom EXACT)"
+    periode: "(dates EXACTES)"
+    details: "(mentions ou spécialités SI mentionnées)"
 
 experience:
-  - poste: "Intitulé du poste"
-    entreprise: "Nom"
-    periode: "Mois 20XX — Mois 20XX"
+  - poste: "(intitulé EXACT)"
+    entreprise: "(nom EXACT)"
+    periode: "(dates EXACTES)"
     missions:
-      - "Mission 1 avec technologies utilisées"
-      - "Mission 2"
+      - "(mission telle que décrite dans le CV)"
 
 competences:
   langages:
-    - nom: "Python"
-      niveau: "avancé"
-    - nom: "JavaScript"
-      niveau: "intermédiaire"
+    - "(langage mentionné dans le CV)"
   frameworks:
-    - "React"
-    - "Node.js"
+    - "(framework mentionné dans le CV)"
   bases_de_donnees:
-    - "PostgreSQL"
-    - "MongoDB"
+    - "(BDD mentionnée dans le CV)"
   outils:
-    - "Git"
-    - "Docker"
-    - "VS Code"
+    - "(outil mentionné dans le CV)"
   methodes:
-    - "Agile"
-    - "MVC"
+    - "(méthode mentionnée dans le CV)"
 
 projets:
-  - titre: "Nom du projet"
-    technologies: "Tech1, Tech2"
-    description: "Ce que fait le projet (1-2 phrases)"
+  - titre: "(nom EXACT du projet)"
+    technologies: "(technologies mentionnées)"
+    description: "(description telle qu'écrite)"
 
 langues:
-  - langue: "Français"
-    niveau: "natif"
-  - langue: "Anglais"
-    niveau: "avancé"
+  - langue: "(langue mentionnée)"
+    niveau: "(niveau SI précisé dans le CV)"
 
 interets:
-  - "Centre d'intérêt 1"
-  - "Centre d'intérêt 2"
+  - "(centre d'intérêt tel qu'écrit dans le CV)"
 
 recherche:
-  type: "alternance"
-  rythme: "Déduis du contexte ou laisse vide"
-  duree: "Déduis du contexte ou laisse vide"
+  type: "(type de contrat recherché)"
+  rythme: "(rythme SI mentionné)"
+  duree: "(durée SI mentionnée)"
   domaines:
-    - "Domaine 1 recherché"
-    - "Domaine 2 recherché"
-  localisation: "{ville or 'Déduis du CV'}"
+    - "(domaine recherché)"
+  localisation: "{ville or '(zone SI mentionnée dans le CV)'}"
 
 points_forts:
-  - "Point fort 1 concret"
-  - "Point fort 2 concret"
-  - "Point fort 3 concret" """
+  - "(point fort UNIQUEMENT s'il est explicitement mentionné dans le CV)"
+
+RAPPEL FINAL : si une section entière est absente du CV, SUPPRIME-LA du YAML. \
+Mieux vaut un profil incomplet mais fidèle qu'un profil complet mais inventé."""
