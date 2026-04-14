@@ -14,11 +14,16 @@ uploads/
 
 # --- Python ---
 __pycache__/
+*.pyc
 *.py[cod]
 *.pyo
 venv/
 .venv/
 *.egg-info/
+dist/
+build/
+uploads/
+*.bak
 
 # --- Fichiers générés ---
 sourcing/offres.json
