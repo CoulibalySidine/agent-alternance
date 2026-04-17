@@ -50,6 +50,15 @@ export const getOffres = (params = {}) => {
 export const deleteOffre = (id) => request(`/api/offres/${id}`, { method: 'DELETE' })
 export const lancerScrape = (p = {}) =>
   request('/api/offres/scrape', { method: 'POST', body: JSON.stringify(p) })
+// --- Fraîcheur ---
+export const getFraicheur = () => request('/api/offres/fraicheur')
+export const verifierOffres = (maxOffres = 20) =>
+  request(`/api/offres/verifier?max_offres=${maxOffres}`, { method: 'POST' })
+export const supprimerAnciennes = (jours = 30) =>
+  request(`/api/offres/anciennes?jours=${jours}`, { method: 'DELETE' })
+
+// --- Stats enrichies ---
+export const getSuiviStatsDetailed = () => request('/api/suivi/stats/detailed')
 
 // --- Qualification ---
 export const scorerOffre = (id, forcer = false) =>
