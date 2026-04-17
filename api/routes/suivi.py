@@ -82,6 +82,91 @@ def stats_suivi():
         par_etat=par_etat,
         score_moyen=round(sum(scores) / len(scores), 1) if scores else None,
     )
+    
+    
+@router.get("/stats/detailed")
+def stats_suivi_detailed():
+    """Stats enrichies : funnel, conversion, activité, sources."""
+    candidatures = charger_suivi()
+
+    if not candidatures:
+        return {"total": 0, "funnel": {}, "taux_conversion": {},
+                "par_source": {}, "par_lieu": {}, "top_entreprises": [],
+                "activite_semaine": [], "score_moyen": None,
+                "duree_moyenne_jours": None, "relances": 0}
+
+    par_etat = defaultdict(int)
+    par_source = defaultdict(int)
+    par_lieu = defaultdict(int)
+    par_entreprise = defaultdict(int)
+    scores = []
+
+    for c in candidatures:
+        par_etat[c.etat] += 1
+        source = c.offre_id.split("_")[0] if "_" in c.offre_id else "inconnu"
+        par_source[source] += 1
+        if c.lieu:
+            par_lieu[c.lieu] += 1
+        par_entreprise[c.entreprise] += 1
+        if c.score is not None:
+            scores.append(c.score)
+
+    total = len(candidatures)
+
+    # Funnel
+    pipeline = ["brouillon", "envoyee", "vue", "entretien", "acceptee"]
+    funnel = {e: sum(1 for c in candidatures
+              if any(h.get("etat") == e for h in c.historique) or c.etat == e)
+              for e in pipeline}
+    funnel["brouillon"] = total
+
+    # Taux de conversion
+    taux = {}
+    if total > 0:
+        taux["global_entretien"] = round(par_etat.get("entretien", 0) / total * 100, 1)
+        taux["global_acceptee"] = round(par_etat.get("acceptee", 0) / total * 100, 1)
+
+    # Activité par semaine
+    now = datetime.now()
+    activite = []
+    for i in range(4):
+        debut = now - timedelta(weeks=i + 1)
+        fin = now - timedelta(weeks=i)
+        count = 0
+        for c in candidatures:
+            try:
+                d = datetime.fromisoformat(c.date_creation)
+                if debut <= d < fin:
+                    count += 1
+            except (ValueError, TypeError):
+                pass
+        activite.append({"semaine": f"S-{i}" if i > 0 else "Cette semaine", "candidatures": count})
+    activite.reverse()
+
+    # Durée moyenne
+    durees = []
+    for c in candidatures:
+        try:
+            d = datetime.fromisoformat(c.date_creation)
+            durees.append((now - d).days)
+        except (ValueError, TypeError):
+            pass
+
+    top_ent = sorted(par_entreprise.items(), key=lambda x: x[1], reverse=True)[:10]
+
+    return {
+        "total": total,
+        "par_etat": dict(par_etat),
+        "score_moyen": round(sum(scores) / len(scores), 1) if scores else None,
+        "funnel": funnel,
+        "taux_conversion": taux,
+        "par_source": dict(par_source),
+        "par_lieu": dict(par_lieu),
+        "top_entreprises": [{"entreprise": e, "count": c} for e, c in top_ent],
+        "activite_semaine": activite,
+        "duree_moyenne_jours": round(sum(durees) / len(durees), 1) if durees else None,
+        "relances": sum(1 for c in candidatures if c.doit_relancer()),
+    }
 
 
 # ============================================================
