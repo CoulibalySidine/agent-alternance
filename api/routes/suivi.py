@@ -18,6 +18,9 @@ Types alignés avec suivi/tracker.py :
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import HTMLResponse
 from typing import Optional
+from typing import Optional
+from collections import defaultdict          # ← AJOUTER
+from datetime import datetime, timedelta     # ← AJOUTER
 
 from suivi.tracker import (
     Candidature, ETATS,

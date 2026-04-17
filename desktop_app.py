@@ -1,17 +1,15 @@
 """
-desktop.py — Lanceur Desktop (PyWebView + FastAPI)
-====================================================
+desktop_app.py — Lanceur Application native (PyWebView)
+=========================================================
 
-Ce script :
-1. Lance le serveur FastAPI dans un thread séparé
-2. Attend que le serveur soit prêt
-3. Ouvre une fenêtre native PyWebView pointant vers le frontend
+Version native : ouvre une fenêtre dédiée (pas le navigateur).
+Nécessite PyWebView + pythonnet.
 
 Usage :
-    python desktop.py
+    python desktop_app.py
 
 Pour créer le .exe :
-    pyinstaller agent-alternance.spec
+    pyinstaller agent-alternance-app.spec
 """
 
 import sys
@@ -20,35 +18,28 @@ import time
 import threading
 import socket
 
-# Fixer le répertoire de travail au dossier du script
-# (important pour PyInstaller qui change le cwd)
+# Fixer le répertoire de travail
 if getattr(sys, "frozen", False):
-    # Mode PyInstaller : le .exe est dans un dossier temporaire
     BASE_DIR = os.path.dirname(sys.executable)
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 os.chdir(BASE_DIR)
 
-# Ajouter le dossier au path Python
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
-# Charger la config (.env) avant tout
 import config  # noqa: E402
 
-PORT = 8000
 HOST = "127.0.0.1"
 
 
 def port_disponible(host: str, port: int) -> bool:
-    """Vérifie si le port est libre."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         return s.connect_ex((host, port)) != 0
 
 
 def trouver_port_libre(debut: int = 8000, fin: int = 8100) -> int:
-    """Trouve un port libre dans la plage donnée."""
     for port in range(debut, fin):
         if port_disponible(HOST, port):
             return port
@@ -56,7 +47,6 @@ def trouver_port_libre(debut: int = 8000, fin: int = 8100) -> int:
 
 
 def attendre_serveur(host: str, port: int, timeout: int = 15) -> bool:
-    """Attend que le serveur soit prêt (max timeout secondes)."""
     debut = time.time()
     while time.time() - debut < timeout:
         try:
@@ -71,39 +61,23 @@ def attendre_serveur(host: str, port: int, timeout: int = 15) -> bool:
 
 
 def lancer_serveur(port: int):
-    """Lance le serveur FastAPI avec Uvicorn."""
     import uvicorn
     from api.main import app
-
-    uvicorn.run(
-        app,
-        host=HOST,
-        port=port,
-        log_level="warning",
-        # Pas de reload en mode desktop
-    )
+    uvicorn.run(app, host=HOST, port=port, log_level="warning")
 
 
 def main():
     import webview
 
-    # Trouver un port libre
     port = trouver_port_libre()
 
-    # Lancer FastAPI dans un thread daemon
-    thread_serveur = threading.Thread(
-        target=lancer_serveur,
-        args=(port,),
-        daemon=True,  # Se ferme automatiquement quand la fenêtre se ferme
-    )
-    thread_serveur.start()
+    thread = threading.Thread(target=lancer_serveur, args=(port,), daemon=True)
+    thread.start()
 
-    # Attendre que le serveur soit prêt
     if not attendre_serveur(HOST, port):
-        print("Erreur : le serveur n'a pas démarré dans les temps.")
+        print("Erreur : le serveur n'a pas démarré.")
         sys.exit(1)
 
-    # Ouvrir la fenêtre PyWebView
     fenetre = webview.create_window(
         title="Agent Alternance",
         url=f"http://{HOST}:{port}",
@@ -113,10 +87,7 @@ def main():
         confirm_close=False,
     )
 
-    # Bloquer ici jusqu'à fermeture de la fenêtre
-    webview.start(
-        debug=not getattr(sys, "frozen", False),  # Debug en dev, pas en .exe
-    )
+    webview.start(debug=not getattr(sys, "frozen", False))
 
 
 if __name__ == "__main__":
