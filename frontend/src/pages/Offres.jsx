@@ -5,6 +5,8 @@ import {
 } from '../api'
 import TaskBar from '../components/TaskBar'
 import { showToast } from '../components/Toast'
+import FreshnessPanel from '../components/FreshnessPanel'
+import { getFraicheur, verifierOffres, supprimerAnciennes } from '../api'
 
 const SCORE_CLS = (s) => s >= 70 ? 'score-high' : s >= 40 ? 'score-mid' : 'score-low'
 const SCORE_COLOR = (s) => s >= 70 ? 'var(--green)' : s >= 40 ? 'var(--yellow)' : 'var(--red)'
@@ -15,11 +17,13 @@ export default function Offres() {
   const [expanded, setExpanded] = useState(null)
   const [task, setTask] = useState(null)
 
+
   // Scrape modal
   const [showScrape, setShowScrape] = useState(false)
   const [scrapeMotCle, setScrapeMotCle] = useState('alternance développeur')
   const [scrapeVille, setScrapeVille] = useState('Paris')
   const [scraping, setScraping] = useState(false)
+  const [fraicheur, setFraicheur] = useState(null)
 
   // Filters
   const [search, setSearch] = useState('')
@@ -56,6 +60,8 @@ export default function Offres() {
 
   useEffect(() => { charger() }, [charger])
 
+  useEffect(() => { getFraicheur().then(setFraicheur).catch(() => {})}, [offres])
+
   // Lieux uniques pour le filtre
   const lieuxUniques = useMemo(() => {
     const lieux = new Set(offres.map(o => o.lieu).filter(Boolean))
@@ -83,7 +89,7 @@ export default function Offres() {
   const handleScrape = async () => {
     setScraping(true)
     try {
-      const res = await lancerScrape({ mot_cle: scrapeMotCle, ville: scrapeVille })
+      const res = await lancerScrape({ mot_cle: scrapeMotCle, ville: scrapeVille, sources: ['wttj', 'lba'] })
       showToast(`${res.nouvelles_offres} nouvelles offres collectées`)
       setShowScrape(false)
       charger()
@@ -228,6 +234,23 @@ export default function Offres() {
                   placeholder="Paris"
                 />
               </div>
+              <div>
+  <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
+    Sources
+  </label>
+  <div style={{ display: 'flex', gap: 8 }}>
+    {[
+      { id: 'lba', label: '🏛️ La bonne alternance' },
+      { id: 'wttj', label: '🌴 WTTJ' },
+    ].map(s => (
+      <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12.5, cursor: 'pointer' }}>
+        <input type="checkbox" defaultChecked style={{ accentColor: 'var(--accent)' }}
+          onChange={e => {/* gérer la sélection */}} />
+        {s.label}
+      </label>
+    ))}
+  </div>
+</div>
             </div>
             <div className="modal-actions">
               <button className="btn" onClick={() => setShowScrape(false)} disabled={scraping}>Annuler</button>
@@ -248,6 +271,12 @@ export default function Offres() {
       </div>
 
       <TaskBar task={task} />
+      <FreshnessPanel
+        fraicheur={fraicheur}
+        onCleanup={supprimerAnciennes}
+        onVerify={verifierOffres}
+        onRefresh={() => { charger(); getFraicheur().then(setFraicheur) }}
+      />
 
       {/* Toolbar améliorée */}
       <div className="toolbar" style={{ flexWrap: 'wrap' }}>

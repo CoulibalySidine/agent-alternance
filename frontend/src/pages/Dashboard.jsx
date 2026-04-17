@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { getSuivi, getSuiviStats, changerEtat, retirerSuivi } from '../api'
 import { showToast } from '../components/Toast'
+import StatsDetailed from '../components/StatsDetailed'
+import { getSuiviStatsDetailed } from '../api'
 
 // ============================================================
 // Constantes
@@ -49,6 +51,7 @@ export default function Dashboard() {
   const [viewMode, setViewMode] = useState('kanban') // 'kanban' | 'table'
   const [expanded, setExpanded] = useState(null)
   const [filterEtat, setFilterEtat] = useState('')
+  const [detailedStats, setDetailedStats] = useState(null)
 
   const charger = useCallback(async () => {
     setLoading(true)
@@ -56,6 +59,7 @@ export default function Dashboard() {
       const params = {}
       if (filterEtat && viewMode === 'table') params.etat = filterEtat
       const [s, st] = await Promise.all([getSuivi(params), getSuiviStats()])
+      getSuiviStatsDetailed().then(setDetailedStats).catch(() => {})
       setCandidatures(s)
       setStats(st)
     } catch (e) {
@@ -88,6 +92,7 @@ export default function Dashboard() {
   }
 
   const relances = candidatures.filter(c => c.doit_relancer)
+  
 
   return (
     <div>
@@ -95,6 +100,7 @@ export default function Dashboard() {
         <h1><span>📊</span> Suivi des candidatures</h1>
         <div className="btn-group">
           <button
+          
             className={`btn ${viewMode === 'kanban' ? 'btn-primary' : ''}`}
             onClick={() => setViewMode('kanban')}
           >▦ Kanban</button>
@@ -147,6 +153,7 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+      <StatsDetailed stats={detailedStats} />
 
       {loading ? (
         <div className="empty">Chargement...</div>
