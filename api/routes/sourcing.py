@@ -13,6 +13,7 @@ from typing import Optional
 
 from sourcing.models import Offre, charger_offres, sauvegarder_offres
 from api.schemas import OffreResponse, ScrapeRequest, ScrapeResponse
+from sourcing.freshness import age_en_jours, verifier_offres_batch, stats_fraicheur
 
 router = APIRouter(prefix="/offres", tags=["Sourcing"])
 
@@ -45,6 +46,8 @@ def lister_offres(
     - /offres?recherche=python&tri=score → Recherche "python"
     """
     offres = charger_offres()
+    
+    
 
     # --- Filtres ---
     if source:
@@ -88,6 +91,52 @@ def lister_offres(
     offres = offres[offset:offset + limit]
 
     return [_offre_to_response(o) for o in offres]
+
+# ============================================================
+# GET /offres/fraicheur — Stats de fraîcheur
+# ============================================================
+
+@router.get("/fraicheur")
+def fraicheur_offres():
+    """Stats de fraîcheur des offres."""
+    offres = charger_offres()
+    return stats_fraicheur(offres)
+
+
+# ============================================================
+# POST /offres/verifier — Vérifier les URLs
+# ============================================================
+
+@router.post("/verifier")
+def verifier_offres(max_offres: int = 20):
+    """Vérifie si les URLs des offres sont encore actives."""
+    offres = charger_offres()
+    offres_triees = sorted(offres, key=lambda o: o.date_collecte or "")
+    resultats = verifier_offres_batch(offres_triees[:max_offres])
+    actives = sum(1 for r in resultats if r["url_active"])
+    return {
+        "verifiees": len(resultats),
+        "actives": actives,
+        "inactives": len(resultats) - actives,
+        "details": resultats,
+    }
+
+
+# ============================================================
+# DELETE /offres/anciennes — Supprimer les offres périmées
+# ============================================================
+
+@router.delete("/anciennes")
+def supprimer_anciennes(jours: int = 30):
+    """Supprime les offres plus vieilles que X jours."""
+    offres = charger_offres()
+    gardees = [o for o in offres if age_en_jours(o) < jours]
+    supprimees = len(offres) - len(gardees)
+    sauvegarder_offres(gardees)
+    return {"supprimees": supprimees, "restantes": len(gardees)}
+
+
+
 
 
 # ============================================================
@@ -140,6 +189,7 @@ def lancer_scrape(params: ScrapeRequest):
             ville=params.ville,
             max_pages=params.max_pages,
             mode_demo=params.mode_demo,
+            sources=params.sources,
         )
     except Exception as e:
         erreurs.append(str(e))
@@ -185,4 +235,5 @@ def _offre_to_response(offre: Offre) -> OffreResponse:
         points_forts=offre.points_forts,
         points_faibles=offre.points_faibles,
         conseil=offre.conseil,
+        age_jours=age_en_jours(offre),  # ← AJOUTER
     )

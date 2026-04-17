@@ -31,6 +31,7 @@ class OffreResponse(BaseModel):
     points_forts: Optional[list[str]] = None
     points_faibles: Optional[list[str]] = None
     conseil: Optional[str] = None
+    age_jours: Optional[int] = None 
 
 
 class ScrapeRequest(BaseModel):
@@ -42,7 +43,7 @@ class ScrapeRequest(BaseModel):
     ville: str = Field(
         default="Paris",
         description="Ville de recherche"
-    )
+    )   
     max_pages: int = Field(
         default=3,
         ge=1, le=10,
@@ -51,6 +52,10 @@ class ScrapeRequest(BaseModel):
     mode_demo: bool = Field(
         default=False,
         description="Utiliser le scraper demo (données fictives)"
+    )
+    sources: list[str] = Field(
+        default=["wttj", "lba"], 
+        description="Sources : wttj, lba, demo"
     )
 
 
